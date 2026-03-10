@@ -42,7 +42,7 @@ const Index = () => {
             </span>
           </div>
           <h1 className="text-3xl font-bold glow-text text-primary mb-1">
-            Roommate Prediction League
+            SleepyPig Prediction League
           </h1>
           <p className="text-muted-foreground text-sm">Will he skip class today? 🤔</p>
         </div>

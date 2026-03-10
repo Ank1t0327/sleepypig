@@ -23,7 +23,9 @@ app.use(
   })
 );
 
-app.options("/*", cors());
+// Express 5 (path-to-regexp v6) doesn't accept "*" or "/*" strings here.
+// Use a RegExp catch-all for OPTIONS preflight.
+app.options(/.*/, cors());
 
 app.use(express.json({ limit: '1mb' }));
 

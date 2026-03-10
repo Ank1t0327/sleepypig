@@ -15,17 +15,16 @@ if (!MONGO_URI) {
 
 const app = express();
 
-const corsOrigins = (process.env.CORS_ORIGIN ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 app.use(
   cors({
-    origin: corsOrigins.length ? corsOrigins : '*',
-    credentials: false,
-  }),
+    origin: "*",
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+  })
 );
+
+app.options("*", cors());
+
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/health', (_req, res) => res.json({ ok: true }));
@@ -36,7 +35,5 @@ app.use(scoresRouter);
 await mongoose.connect(MONGO_URI);
 
 app.listen(PORT, () => {
-  // eslint-disable-next-line no-console
   console.log(`API listening on :${PORT}`);
 });
-

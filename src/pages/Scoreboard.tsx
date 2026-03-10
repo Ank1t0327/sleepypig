@@ -1,15 +1,53 @@
 import { useNavigate } from "react-router-dom";
-import { useGameData } from "@/hooks/useGameData";
-import { calculateAccuracy } from "@/lib/gameData";
 import { ArrowLeft, Trophy, Crown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchScores } from "@/lib/api";
+import { toast } from "sonner";
 
 const Scoreboard = () => {
   const navigate = useNavigate();
-  const { data } = useGameData();
-  const { ankit, vasu } = data.scores;
-  const ankitAcc = calculateAccuracy(data, "ankit");
-  const vasuAcc = calculateAccuracy(data, "vasu");
-  const leader = ankit > vasu ? "ankit" : vasu > ankit ? "vasu" : "tie";
+  const [loading, setLoading] = useState(true);
+  const [ankit, setAnkit] = useState<number>(0);
+  const [vasu, setVasu] = useState<number>(0);
+
+  const leader = useMemo(() => {
+    if (ankit > vasu) return "ankit";
+    if (vasu > ankit) return "vasu";
+    return "tie";
+  }, [ankit, vasu]);
+
+  const refresh = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchScores();
+
+      // Supports either array form: [{player, points}] or object-ish responses.
+      if (Array.isArray(data)) {
+        const a = data.find((s) => String(s.player).toLowerCase() === "ankit");
+        const v = data.find((s) => String(s.player).toLowerCase() === "vasu");
+        const aPoints = (a && ("points" in a ? a.points : (a as any).score)) ?? 0;
+        const vPoints = (v && ("points" in v ? v.points : (v as any).score)) ?? 0;
+        setAnkit(Number(aPoints) || 0);
+        setVasu(Number(vPoints) || 0);
+      } else {
+        const aPoints = (data as any)?.ankit ?? (data as any)?.Ankit ?? 0;
+        const vPoints = (data as any)?.vasu ?? (data as any)?.Vasu ?? 0;
+        setAnkit(Number(aPoints) || 0);
+        setVasu(Number(vPoints) || 0);
+      }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to load scores");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+    const id = window.setInterval(() => void refresh(), 10_000);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="min-h-screen bg-background">
@@ -18,7 +56,16 @@ const Scoreboard = () => {
           <button onClick={() => navigate("/")} className="p-2 rounded-lg hover:bg-secondary">
             <ArrowLeft className="w-5 h-5" />
           </button>
-          <h1 className="text-xl font-bold">Scoreboard</h1>
+          <div className="flex items-center justify-between flex-1">
+            <h1 className="text-xl font-bold">Scoreboard</h1>
+            <button
+              onClick={() => void refresh()}
+              className="text-xs font-mono text-muted-foreground hover:text-primary transition-colors"
+              disabled={loading}
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
 
         <div className="space-y-4">
@@ -33,18 +80,11 @@ const Scoreboard = () => {
                 {leader === "ankit" && <Crown className="w-5 h-5 text-primary" />}
                 <span className="text-lg font-semibold">Ankit</span>
               </div>
-              <span className="text-3xl font-bold font-mono text-primary">{ankit.toFixed(2)}</span>
+              <span className="text-3xl font-bold font-mono text-primary">
+                {Number.isFinite(ankit) ? ankit.toFixed(2) : "0.00"}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${ankitAcc}%` }}
-                />
-              </div>
-              <span className="text-sm font-mono text-muted-foreground">{ankitAcc}%</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Prediction accuracy</p>
+            <p className="text-xs text-muted-foreground mt-1">Total points</p>
           </div>
 
           {/* Vasu */}
@@ -58,18 +98,11 @@ const Scoreboard = () => {
                 {leader === "vasu" && <Crown className="w-5 h-5 text-primary" />}
                 <span className="text-lg font-semibold">Vasu</span>
               </div>
-              <span className="text-3xl font-bold font-mono text-primary">{vasu.toFixed(2)}</span>
+              <span className="text-3xl font-bold font-mono text-primary">
+                {Number.isFinite(vasu) ? vasu.toFixed(2) : "0.00"}
+              </span>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-primary rounded-full transition-all"
-                  style={{ width: `${vasuAcc}%` }}
-                />
-              </div>
-              <span className="text-sm font-mono text-muted-foreground">{vasuAcc}%</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Prediction accuracy</p>
+            <p className="text-xs text-muted-foreground mt-1">Total points</p>
           </div>
 
           {leader === "tie" && (

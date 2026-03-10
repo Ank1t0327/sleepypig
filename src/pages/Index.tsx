@@ -54,7 +54,7 @@ const Index = () => {
           <h1 className="text-3xl font-bold glow-text text-primary mb-1">
             SleepyPig Prediction League
           </h1>
-          <p className="text-muted-foreground text-sm">Will he skip class today? 🤔</p>
+          <p className="text-muted-foreground text-sm">To kya karega aapka Suar? 🐷</p>
         </div>
 
         {/* Skip Probability */}

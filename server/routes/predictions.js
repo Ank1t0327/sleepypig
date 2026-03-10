@@ -10,6 +10,9 @@ const RESULT_VALUES = ['present', 'absent'];
 function toDate(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return null;
+  // Normalize to date-only so className+date lookups match reliably
+  // across inputs like "2026-03-10" vs new Date() with time.
+  d.setUTCHours(0, 0, 0, 0);
   return d;
 }
 

@@ -26,6 +26,17 @@ const Predictions = () => {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [wokeState, setWokeState] = useState<Record<string, boolean>>({});
 
+  const getStartMinutes = (timeLabel: string, fallbackHour: number) => {
+    const first = timeLabel.split("-")[0]?.trim() ?? "";
+    const match = first.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      const h = Number(match[1]);
+      const m = Number(match[2]);
+      if (Number.isFinite(h) && Number.isFinite(m)) return h * 60 + m;
+    }
+    return fallbackHour * 60;
+  };
+
   const refreshAll = async () => {
     try {
       setLoading(true);
@@ -136,7 +147,7 @@ const Predictions = () => {
           {classes.map((cls) => {
             const now = new Date();
             const nowMinutes = now.getHours() * 60 + now.getMinutes();
-            const startMinutes = cls.hour * 60;
+            const startMinutes = getStartMinutes(cls.time, cls.hour);
             const cutoffMinutes = startMinutes - 15;
             const canPredict = nowMinutes < cutoffMinutes;
             const isPast = nowMinutes >= startMinutes + 60; // 1h slot
@@ -167,24 +178,40 @@ const Predictions = () => {
                   {/* Prediction buttons */}
                   <div className="flex gap-2 mb-2">
                     <button
-                      onClick={() => void predictAbsent(cls.name, "Ankit")}
-                      disabled={!canPredict || ankitDone || busyKey === `${cls.name}:Ankit`}
+                      onClick={() => {
+                        if (!canPredict) {
+                          toast.message("Predictions close 15 minutes before class starts.");
+                          return;
+                        }
+                        void predictAbsent(cls.name, "Ankit");
+                      }}
+                      disabled={ankitDone || busyKey === `${cls.name}:Ankit`}
                       className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                         ankitDone
                           ? "bg-primary text-primary-foreground glow-orange font-semibold"
-                          : "bg-secondary hover:bg-secondary/80"
+                          : canPredict
+                            ? "bg-secondary hover:bg-secondary/80"
+                            : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                       } ${ankitDone || busyKey === `${cls.name}:Ankit` ? "opacity-90" : ""}`}
                     >
                       <User className="w-3 h-3 inline mr-1" />
                       {ankitDone ? "Ankit ✓" : "Ankit: ABSENT"}
                     </button>
                     <button
-                      onClick={() => void predictAbsent(cls.name, "Vasu")}
-                      disabled={!canPredict || vasuDone || busyKey === `${cls.name}:Vasu`}
+                      onClick={() => {
+                        if (!canPredict) {
+                          toast.message("Predictions close 15 minutes before class starts.");
+                          return;
+                        }
+                        void predictAbsent(cls.name, "Vasu");
+                      }}
+                      disabled={vasuDone || busyKey === `${cls.name}:Vasu`}
                       className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
                         vasuDone
                           ? "bg-primary text-primary-foreground glow-orange font-semibold"
-                          : "bg-secondary hover:bg-secondary/80"
+                          : canPredict
+                            ? "bg-secondary hover:bg-secondary/80"
+                            : "bg-secondary/40 text-muted-foreground cursor-not-allowed"
                       } ${vasuDone || busyKey === `${cls.name}:Vasu` ? "opacity-90" : ""}`}
                     >
                       <User className="w-3 h-3 inline mr-1" />

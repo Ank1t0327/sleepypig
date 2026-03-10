@@ -22,8 +22,8 @@ const corsOrigins = (process.env.CORS_ORIGIN ?? '')
 
 app.use(
   cors({
-    origin: corsOrigins.length ? corsOrigins : true,
-    credentials: true,
+    origin: corsOrigins.length ? corsOrigins : '*',
+    credentials: false,
   }),
 );
 app.use(express.json({ limit: '1mb' }));

@@ -52,3 +52,14 @@ export async function fetchScores(): Promise<ApiScore[] | Record<string, unknown
   return requestJson<ApiScore[] | Record<string, unknown>>("/scores");
 }
 
+export async function postResult(input: {
+  className: string;
+  date: string;
+  actual: PredictionValue;
+}): Promise<unknown> {
+  return requestJson("/result", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+

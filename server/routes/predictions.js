@@ -5,6 +5,7 @@ import { Score } from '../models/Score.js';
 export const predictionsRouter = express.Router();
 
 const PLAYERS = ['Ankit', 'Vasu'];
+const RESULT_VALUES = ['present', 'absent'];
 
 function toDate(value) {
   const d = value instanceof Date ? value : new Date(value);
@@ -41,6 +42,40 @@ predictionsRouter.post('/prediction', async (req, res) => {
   if (ankitPrediction !== undefined) update.ankitPrediction = normResult(ankitPrediction);
   if (vasuPrediction !== undefined) update.vasuPrediction = normResult(vasuPrediction);
   if (woke !== undefined) update.woke = Boolean(woke);
+
+  const doc = await Prediction.findOneAndUpdate(
+    { className: String(className).trim(), date: d },
+    { $set: update, $setOnInsert: { className: String(className).trim(), date: d } },
+    { upsert: true, new: true },
+  );
+
+  return res.json(doc);
+});
+
+// POST /predictions
+// Save a single player's prediction (deployed frontend shape).
+predictionsRouter.post('/predictions', async (req, res) => {
+  const { player, className, prediction, date } = req.body ?? {};
+  if (!player || !className || prediction == null) {
+    return res.status(400).json({ error: '`player`, `className`, and `prediction` are required' });
+  }
+
+  const playerNorm = String(player).trim().toLowerCase();
+  const playerName =
+    playerNorm === 'ankit' ? 'Ankit' : playerNorm === 'vasu' ? 'Vasu' : null;
+  if (!playerName) {
+    return res.status(400).json({ error: '`player` must be "Ankit" or "Vasu"' });
+  }
+
+  const predNorm = normResult(prediction);
+  if (!predNorm || !RESULT_VALUES.includes(predNorm)) {
+    return res.status(400).json({ error: '`prediction` must be "present" or "absent"' });
+  }
+
+  const d = toDate(date ?? new Date());
+  if (!d) return res.status(400).json({ error: '`date` must be a valid date' });
+
+  const update = playerName === 'Ankit' ? { ankitPrediction: predNorm } : { vasuPrediction: predNorm };
 
   const doc = await Prediction.findOneAndUpdate(
     { className: String(className).trim(), date: d },

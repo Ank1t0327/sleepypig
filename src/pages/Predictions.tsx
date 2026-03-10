@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   getTodayClasses,
@@ -7,7 +7,13 @@ import {
 } from "@/lib/gameData";
 import { ArrowLeft, Clock, User, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
-import { createPrediction, fetchPredictions, fetchScores, type ApiPrediction } from "@/lib/api";
+import {
+  createPrediction,
+  fetchPredictions,
+  fetchScores,
+  postResult,
+  type ApiPrediction,
+} from "@/lib/api";
 
 const Predictions = () => {
   const navigate = useNavigate();
@@ -19,22 +25,10 @@ const Predictions = () => {
   } as any);
   const today = getTodayName();
   const date = getDateString();
-  const [showWoke, setShowWoke] = useState<string | null>(null);
-  const longPressTimer = useRef<ReturnType<typeof setTimeout>>();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ApiPrediction[]>([]);
   const [ankitScore, setAnkitScore] = useState(0);
   const [vasuScore, setVasuScore] = useState(0);
-
-  const handleLongPressStart = useCallback((classId: string) => {
-    longPressTimer.current = setTimeout(() => {
-      setShowWoke(classId);
-    }, 600);
-  }, []);
-
-  const handleLongPressEnd = useCallback(() => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
-  }, []);
 
   const refreshAll = async () => {
     try {
@@ -73,13 +67,17 @@ const Predictions = () => {
   };
 
   const setResult = (classId: string, result: "present" | "absent") => {
-    // Results are handled by the backend (not exposed in the deployed routes list).
-    toast.message(`Result entry not available in deployed API (attempted: ${result})`);
-  };
-
-  const markWoke = (classId: string) => {
-    setShowWoke(null);
-    toast.message("Woke flag is handled by backend results (not available in deployed API).");
+    const cls = classes.find((c) => c.id === classId);
+    if (!cls) return;
+    void (async () => {
+      try {
+        await postResult({ className: cls.name, date, actual: result });
+        toast.success(`Marked ${cls.name} as ${result.toUpperCase()}`);
+        await refreshAll();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Failed to save result");
+      }
+    })();
   };
 
   const todaysPredictions = useMemo(() => {
@@ -140,11 +138,6 @@ const Predictions = () => {
               <div key={cls.id} className="relative">
                 <div
                   className="card-glass rounded-xl p-4 animate-slide-up"
-                  onTouchStart={() => handleLongPressStart(cls.id)}
-                  onTouchEnd={handleLongPressEnd}
-                  onMouseDown={() => handleLongPressStart(cls.id)}
-                  onMouseUp={handleLongPressEnd}
-                  onMouseLeave={handleLongPressEnd}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
@@ -157,11 +150,6 @@ const Predictions = () => {
                         Makeup
                       </span>
                     )}
-                  </div>
-
-                  {/* Prediction status */}
-                  <div className="text-xs text-muted-foreground mb-2 font-mono">
-                    Tap to predict ABSENT (saved to MongoDB via API)
                   </div>
 
                   {/* Prediction buttons */}
@@ -202,30 +190,9 @@ const Predictions = () => {
 
                   {/* Show result */}
                   <div className="text-center py-2 rounded-lg text-sm font-mono bg-secondary/60 text-muted-foreground">
-                    Results are not editable from the frontend (deployed API doesn’t expose `/result`)
+                    &nbsp;
                   </div>
                 </div>
-
-                {/* Woke popup */}
-                {showWoke === cls.id && (
-                  <div className="absolute inset-0 bg-background/90 backdrop-blur-sm rounded-xl flex flex-col items-center justify-center gap-3 z-20 animate-slide-up">
-                    <p className="text-sm font-medium">Woke him up? ☀️</p>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => markWoke(cls.id)}
-                        className="px-6 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium active:scale-95"
-                      >
-                        Yes
-                      </button>
-                      <button
-                        onClick={() => setShowWoke(null)}
-                        className="px-6 py-2 bg-secondary rounded-lg text-sm active:scale-95"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}

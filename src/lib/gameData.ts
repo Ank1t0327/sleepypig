@@ -92,6 +92,10 @@ export function saveGameData(data: GameData) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
 }
 
+export function clearGameData() {
+  localStorage.removeItem(STORAGE_KEY);
+}
+
 export function getTodayClasses(data: GameData): ClassSlot[] {
   const day = getTodayName();
   const base = TIMETABLE[day] || [];

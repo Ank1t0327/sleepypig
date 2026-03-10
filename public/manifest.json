@@ -1,7 +1,7 @@
 {
-  "name": "Roommate Prediction League",
-  "short_name": "PredictLeague",
-  "description": "Predict if your roommate will skip class!",
+  "name": "SleepyPig Prediction League",
+  "short_name": "SleepyPig",
+  "description": "Predict if SleepyPig will skip class!",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0d0d0d",

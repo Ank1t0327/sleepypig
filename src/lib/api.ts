@@ -5,9 +5,12 @@ export type PredictionValue = "absent" | "present";
 
 export type ApiPrediction = {
   _id?: string;
-  player: PlayerName | string;
   className: string;
-  prediction: PredictionValue | string;
+  date: string;
+  ankitPrediction?: PredictionValue | null;
+  vasuPrediction?: PredictionValue | null;
+  actualResult?: PredictionValue | null;
+  woke?: boolean | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -41,6 +44,7 @@ export async function createPrediction(input: {
   player: PlayerName;
   className: string;
   prediction: PredictionValue;
+  date: string;
 }): Promise<ApiPrediction> {
   return requestJson<ApiPrediction>("/predictions", {
     method: "POST",
@@ -56,10 +60,17 @@ export async function postResult(input: {
   className: string;
   date: string;
   actual: PredictionValue;
+  woke?: boolean;
 }): Promise<unknown> {
   return requestJson("/result", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export async function resetGame(): Promise<{ ok: true }> {
+  return requestJson<{ ok: true }>("/reset", {
+    method: "POST",
   });
 }
 

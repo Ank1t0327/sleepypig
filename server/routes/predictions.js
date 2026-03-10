@@ -25,7 +25,12 @@ function normResult(value) {
 
 function pointsFor({ woke, actualResult, prediction }) {
   if (prediction == null) return 0;
-  if (woke === true && actualResult === 'present') return 0;
+  if (woke === true) {
+    if (actualResult === 'present') return 0;
+    if (actualResult === 'absent') {
+      return prediction === 'absent' ? 1.25 : -0.25;
+    }
+  }
   return prediction === actualResult ? 1 : -0.25;
 }
 
@@ -157,5 +162,12 @@ predictionsRouter.post('/result', async (req, res) => {
 predictionsRouter.get('/predictions', async (_req, res) => {
   const docs = await Prediction.find().sort({ date: -1, createdAt: -1 }).lean();
   return res.json(docs);
+});
+
+// POST /reset
+// Hard reset: clears all predictions and scores.
+predictionsRouter.post('/reset', async (_req, res) => {
+  await Promise.all([Prediction.deleteMany({}), Score.deleteMany({})]);
+  return res.json({ ok: true });
 });
 

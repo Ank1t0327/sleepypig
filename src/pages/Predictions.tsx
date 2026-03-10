@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useGameData } from "@/hooks/useGameData";
 import {
   getTodayClasses,
   getDateString,
@@ -10,38 +11,26 @@ import { toast } from "sonner";
 import {
   createPrediction,
   fetchPredictions,
-  fetchScores,
   postResult,
   type ApiPrediction,
 } from "@/lib/api";
 
 const Predictions = () => {
   const navigate = useNavigate();
-  // Class schedule is still local; predictions/scores are loaded from the deployed API.
-  const classes = getTodayClasses({
-    scores: { ankit: 0, vasu: 0 },
-    predictions: [],
-    customClasses: {},
-  } as any);
+  const { data } = useGameData();
+  const classes = getTodayClasses(data);
   const today = getTodayName();
   const date = getDateString();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ApiPrediction[]>([]);
-  const [ankitScore, setAnkitScore] = useState(0);
-  const [vasuScore, setVasuScore] = useState(0);
+  const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [wokeState, setWokeState] = useState<Record<string, boolean>>({});
 
   const refreshAll = async () => {
     try {
       setLoading(true);
-      const [preds, scores] = await Promise.all([fetchPredictions(), fetchScores()]);
+      const preds = await fetchPredictions();
       setItems(preds);
-
-      if (Array.isArray(scores)) {
-        const a = scores.find((s) => String((s as any).player).toLowerCase() === "ankit");
-        const v = scores.find((s) => String((s as any).player).toLowerCase() === "vasu");
-        setAnkitScore(Number((a as any)?.points ?? (a as any)?.score ?? 0) || 0);
-        setVasuScore(Number((v as any)?.points ?? (v as any)?.score ?? 0) || 0);
-      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to refresh");
     } finally {
@@ -56,39 +45,67 @@ const Predictions = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const todayDocs = useMemo(() => {
+    const list = items.filter((p) => {
+      const d = new Date(p.date);
+      const key = Number.isNaN(d.getTime()) ? "" : d.toISOString().slice(0, 10);
+      return key === date;
+    });
+    const byClass = new Map<string, ApiPrediction>();
+    for (const p of list) {
+      const prev = byClass.get(p.className);
+      if (!prev) {
+        byClass.set(p.className, p);
+        continue;
+      }
+      const pt = prev.updatedAt ? Date.parse(prev.updatedAt) : prev.createdAt ? Date.parse(prev.createdAt) : 0;
+      const nt = p.updatedAt ? Date.parse(p.updatedAt) : p.createdAt ? Date.parse(p.createdAt) : 0;
+      if (nt >= pt) byClass.set(p.className, p);
+    }
+    return byClass;
+  }, [items, date]);
+
   const predictAbsent = async (className: string, player: "Ankit" | "Vasu") => {
+    const doc = todayDocs.get(className);
+    const already =
+      player === "Ankit" ? doc?.ankitPrediction === "absent" : doc?.vasuPrediction === "absent";
+    if (already) return;
+
+    const key = `${className}:${player}`;
     try {
-      await createPrediction({ player, className, prediction: "absent" });
+      setBusyKey(key);
+      await createPrediction({ player, className, prediction: "absent", date });
       toast.success(`${player} predicted ABSENT for ${className}`);
       await refreshAll();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to save prediction");
+    } finally {
+      setBusyKey(null);
     }
   };
 
   const setResult = (classId: string, result: "present" | "absent") => {
     const cls = classes.find((c) => c.id === classId);
     if (!cls) return;
+    const doc = todayDocs.get(cls.name);
+    const effectiveWoke = wokeState[cls.id] ?? (doc?.woke ?? false);
     void (async () => {
       try {
-        await postResult({ className: cls.name, date, actual: result });
+        setBusyKey(`${cls.name}:result`);
+        await postResult({ className: cls.name, date, actual: result, woke: effectiveWoke });
         toast.success(`Marked ${cls.name} as ${result.toUpperCase()}`);
         await refreshAll();
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Failed to save result");
+      } finally {
+        setBusyKey(null);
       }
     })();
   };
 
   const todaysPredictions = useMemo(() => {
-    // Deployed API doesn't provide date in request shape; show everything.
-    // Sort newest first if timestamps exist.
-    return [...items].sort((a, b) => {
-      const at = a.createdAt ? Date.parse(a.createdAt) : 0;
-      const bt = b.createdAt ? Date.parse(b.createdAt) : 0;
-      return bt - at;
-    });
-  }, [items]);
+    return Array.from(todayDocs.values()).sort((a, b) => a.className.localeCompare(b.className));
+  }, [todayDocs]);
 
   if (today === "Sunday" || today === "Saturday") {
     return (
@@ -112,27 +129,22 @@ const Predictions = () => {
             <h1 className="text-xl font-bold">Today's Classes</h1>
             <p className="text-xs text-muted-foreground font-mono">{today} • {date}</p>
           </div>
-          <div className="ml-auto text-right">
-            <div className="text-xs font-mono text-muted-foreground">Scores</div>
-            <div className="text-xs font-mono">
-              <span className="text-primary">Ankit</span> {ankitScore.toFixed(2)} •{" "}
-              <span className="text-primary">Vasu</span> {vasuScore.toFixed(2)}
-            </div>
-            <button
-              onClick={() => void refreshAll()}
-              disabled={loading}
-              className="text-[10px] font-mono text-muted-foreground hover:text-primary transition-colors"
-            >
-              {loading ? "Refreshing..." : "Refresh"}
-            </button>
-          </div>
         </div>
 
         {/* Classes */}
         <div className="space-y-3">
           {classes.map((cls) => {
-            const now = new Date().getHours();
-            const isPast = now >= cls.hour + 1;
+            const now = new Date();
+            const nowMinutes = now.getHours() * 60 + now.getMinutes();
+            const startMinutes = cls.hour * 60;
+            const cutoffMinutes = startMinutes - 15;
+            const canPredict = nowMinutes < cutoffMinutes;
+            const isPast = nowMinutes >= startMinutes + 60; // 1h slot
+            const doc = todayDocs.get(cls.name);
+            const ankitDone = doc?.ankitPrediction === "absent";
+            const vasuDone = doc?.vasuPrediction === "absent";
+            const actual = doc?.actualResult ?? null;
+            const effectiveWoke = wokeState[cls.id] ?? (doc?.woke ?? false);
 
             return (
               <div key={cls.id} className="relative">
@@ -156,17 +168,47 @@ const Predictions = () => {
                   <div className="flex gap-2 mb-2">
                     <button
                       onClick={() => void predictAbsent(cls.name, "Ankit")}
-                      className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 bg-secondary hover:bg-secondary/80"
+                      disabled={!canPredict || ankitDone || busyKey === `${cls.name}:Ankit`}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                        ankitDone
+                          ? "bg-primary text-primary-foreground glow-orange font-semibold"
+                          : "bg-secondary hover:bg-secondary/80"
+                      } ${ankitDone || busyKey === `${cls.name}:Ankit` ? "opacity-90" : ""}`}
                     >
                       <User className="w-3 h-3 inline mr-1" />
-                      Ankit: ABSENT
+                      {ankitDone ? "Ankit ✓" : "Ankit: ABSENT"}
                     </button>
                     <button
                       onClick={() => void predictAbsent(cls.name, "Vasu")}
-                      className="flex-1 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 bg-secondary hover:bg-secondary/80"
+                      disabled={!canPredict || vasuDone || busyKey === `${cls.name}:Vasu`}
+                      className={`flex-1 py-2.5 rounded-lg text-sm font-medium transition-all active:scale-95 ${
+                        vasuDone
+                          ? "bg-primary text-primary-foreground glow-orange font-semibold"
+                          : "bg-secondary hover:bg-secondary/80"
+                      } ${vasuDone || busyKey === `${cls.name}:Vasu` ? "opacity-90" : ""}`}
                     >
                       <User className="w-3 h-3 inline mr-1" />
-                      Vasu: ABSENT
+                      {vasuDone ? "Vasu ✓" : "Vasu: ABSENT"}
+                    </button>
+                  </div>
+
+                  {/* Woke him up toggle */}
+                  <div className="flex items-center justify-end mb-2">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setWokeState((prev) => ({
+                          ...prev,
+                          [cls.id]: !(prev[cls.id] ?? doc?.woke ?? false),
+                        }))
+                      }
+                      className={`text-xs font-mono px-2 py-1 rounded-full border transition-colors ${
+                        effectiveWoke
+                          ? "bg-primary/10 border-primary text-primary"
+                          : "bg-secondary/40 border-border text-muted-foreground"
+                      }`}
+                    >
+                      ☀️ Woke him up
                     </button>
                   </div>
 
@@ -175,23 +217,26 @@ const Predictions = () => {
                     <div className="flex gap-2 pt-2 border-t border-border">
                       <button
                         onClick={() => setResult(cls.id, "present")}
-                        className="flex-1 py-2 rounded-lg bg-success/20 text-success text-sm font-medium active:scale-95"
+                        disabled={busyKey === `${cls.name}:result` || actual === "present"}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium active:scale-95 ${
+                          actual === "present" ? "bg-success text-success-foreground" : "bg-success/20 text-success"
+                        }`}
                       >
                         <CheckCircle className="w-3 h-3 inline mr-1" /> Present
                       </button>
                       <button
                         onClick={() => setResult(cls.id, "absent")}
-                        className="flex-1 py-2 rounded-lg bg-destructive/20 text-destructive text-sm font-medium active:scale-95"
+                        disabled={busyKey === `${cls.name}:result` || actual === "absent"}
+                        className={`flex-1 py-2 rounded-lg text-sm font-medium active:scale-95 ${
+                          actual === "absent"
+                            ? "bg-destructive text-destructive-foreground"
+                            : "bg-destructive/20 text-destructive"
+                        }`}
                       >
                         <XCircle className="w-3 h-3 inline mr-1" /> Absent
                       </button>
                     </div>
                   )}
-
-                  {/* Show result */}
-                  <div className="text-center py-2 rounded-lg text-sm font-mono bg-secondary/60 text-muted-foreground">
-                    &nbsp;
-                  </div>
                 </div>
               </div>
             );
@@ -207,25 +252,39 @@ const Predictions = () => {
         {/* All predictions (from API) */}
         <div className="mt-8">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">All Predictions</h2>
+            <h2 className="text-lg font-semibold">Today's Predictions</h2>
             <span className="text-xs font-mono text-muted-foreground">
-              {loading ? "Loading..." : `${todaysPredictions.length} total`}
+              {loading ? "Loading..." : `${todaysPredictions.length} classes`}
             </span>
           </div>
           <div className="space-y-2">
             {todaysPredictions.map((p, idx) => (
-              <div key={p._id ?? `${p.player}-${p.className}-${idx}`} className="card-glass rounded-xl p-3">
+              <div key={p._id ?? `${p.className}-${idx}`} className="card-glass rounded-xl p-3">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-semibold">{p.className}</div>
                   <div className="text-xs font-mono text-muted-foreground">
                     {p.createdAt ? new Date(p.createdAt).toLocaleString() : ""}
                   </div>
                 </div>
-                <div className="text-sm mt-1">
-                  <span className="font-mono text-muted-foreground">Player:</span>{" "}
-                  <span className="text-primary">{String(p.player)}</span>{" "}
-                  <span className="font-mono text-muted-foreground">Prediction:</span>{" "}
-                  <span className="font-semibold">{String(p.prediction).toUpperCase()}</span>
+                <div className="text-sm mt-1 flex flex-wrap gap-x-4 gap-y-1">
+                  <span>
+                    <span className="font-mono text-muted-foreground">Ankit:</span>{" "}
+                    <span className={p.ankitPrediction ? "text-primary font-semibold" : "text-muted-foreground"}>
+                      {p.ankitPrediction ? p.ankitPrediction.toUpperCase() : "—"}
+                    </span>
+                  </span>
+                  <span>
+                    <span className="font-mono text-muted-foreground">Vasu:</span>{" "}
+                    <span className={p.vasuPrediction ? "text-primary font-semibold" : "text-muted-foreground"}>
+                      {p.vasuPrediction ? p.vasuPrediction.toUpperCase() : "—"}
+                    </span>
+                  </span>
+                  {p.actualResult && (
+                    <span>
+                      <span className="font-mono text-muted-foreground">Result:</span>{" "}
+                      <span className="font-semibold">{p.actualResult.toUpperCase()}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

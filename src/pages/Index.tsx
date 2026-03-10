@@ -1,8 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { useGameData } from "@/hooks/useGameData";
-import { calculateSkipProbability, getTodayName } from "@/lib/gameData";
+import { calculateSkipProbability, clearGameData, getTodayName } from "@/lib/gameData";
 import { Moon, Trophy, Clock, PlusCircle, Trash2, Target } from "lucide-react";
 import { toast } from "sonner";
+import { resetGame } from "@/lib/api";
 
 const Index = () => {
   const navigate = useNavigate();
@@ -13,8 +14,17 @@ const Index = () => {
   const handleReset = () => {
     if (window.confirm("Reset ALL game data? This cannot be undone!")) {
       if (window.confirm("Are you really sure? All scores and predictions will be lost!")) {
-        update(() => ({ scores: { ankit: 0, vasu: 0 }, predictions: [], customClasses: {} }));
-        toast.success("Game data reset!");
+        void (async () => {
+          try {
+            await resetGame();
+          } catch {
+            toast.error("Reset failed. Please try again.");
+            return;
+          }
+          clearGameData();
+          update(() => ({ scores: { ankit: 0, vasu: 0 }, predictions: [], customClasses: {} }));
+          toast.success("Game data reset.");
+        })();
       }
     }
   };
@@ -42,7 +52,7 @@ const Index = () => {
             </span>
           </div>
           <h1 className="text-3xl font-bold glow-text text-primary mb-1">
-            Roommate Prediction League
+            SleepyPig Prediction League
           </h1>
           <p className="text-muted-foreground text-sm">Will he skip class today? 🤔</p>
         </div>

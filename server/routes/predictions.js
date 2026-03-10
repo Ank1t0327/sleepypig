@@ -54,18 +54,20 @@ predictionsRouter.post('/prediction', async (req, res) => {
 // POST /result
 // Save actual result and update scores.
 predictionsRouter.post('/result', async (req, res) => {
-  const { className, date, actualResult, woke } = req.body ?? {};
-  if (!className || !date || actualResult == null) {
-    return res
-      .status(400)
-      .json({ error: '`className`, `date`, and `actualResult` are required' });
+  const { className, date, actual, actualResult, woke } = req.body ?? {};
+  const actualIncoming = actual ?? actualResult; // accept either for backwards compatibility
+  if (!className || !date || actualIncoming == null) {
+    return res.status(400).json({ error: '`className`, `date`, and `actual` are required' });
   }
 
   const d = toDate(date);
   if (!d) return res.status(400).json({ error: '`date` must be a valid date' });
 
-  const resultNorm = normResult(actualResult);
-  if (!resultNorm) return res.status(400).json({ error: '`actualResult` cannot be empty' });
+  const resultNorm = normResult(actualIncoming);
+  if (!resultNorm) return res.status(400).json({ error: '`actual` cannot be empty' });
+  if (resultNorm !== 'present' && resultNorm !== 'absent') {
+    return res.status(400).json({ error: '`actual` must be "present" or "absent"' });
+  }
 
   const filter = { className: String(className).trim(), date: d };
 
@@ -79,7 +81,10 @@ predictionsRouter.post('/result', async (req, res) => {
     existing.actualResult = resultNorm;
     if (woke !== undefined) existing.woke = Boolean(woke);
     await existing.save();
-    return res.json({ prediction: existing, scoreUpdated: false });
+    const scores = await Score.find({ player: { $in: PLAYERS } })
+      .sort({ player: 1 })
+      .lean();
+    return res.json({ prediction: existing, scoreUpdated: false, scores });
   }
 
   existing.actualResult = resultNorm;
@@ -103,7 +108,11 @@ predictionsRouter.post('/result', async (req, res) => {
   existing.scored = true;
   await existing.save();
 
-  return res.json({ prediction: existing, scoreUpdated: true, deltas });
+  const scores = await Score.find({ player: { $in: PLAYERS } })
+    .sort({ points: -1, player: 1 })
+    .lean();
+
+  return res.json({ prediction: existing, scoreUpdated: true, deltas, scores });
 });
 
 // GET /predictions

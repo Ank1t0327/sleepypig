@@ -85,7 +85,7 @@ npm run server:dev
 ### Endpoints
 
 - `POST /prediction` body: `{ className, date, ankitPrediction?, vasuPrediction?, woke? }`
-- `POST /result` body: `{ className, date, actualResult, woke? }`
+- `POST /result` body: `{ className, date, actual: "present" | "absent" }` (also accepts `actualResult` for backwards compatibility)
 - `GET /predictions`
 - `GET /scores`
 

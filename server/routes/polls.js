@@ -30,11 +30,11 @@ function pollPoints({ prediction, answer }) {
 // POST /poll
 // Create a new poll question for Boolean Pig mode.
 pollsRouter.post('/poll', async (req, res) => {
-  const { question, askedBy, prediction, date } = req.body ?? {};
-  if (!question || !askedBy || prediction == null || !date) {
+  const { question, askedBy, date } = req.body ?? {};
+  if (!question || !askedBy || !date) {
     return res
       .status(400)
-      .json({ error: '`question`, `askedBy`, `prediction` and `date` are required' });
+      .json({ error: '`question`, `askedBy`, and `date` are required' });
   }
 
   const day = toDateOnly(date);
@@ -48,11 +48,37 @@ pollsRouter.post('/poll', async (req, res) => {
   const poll = await Poll.create({
     question: String(question).trim(),
     askedBy: String(askedBy).trim(),
-    prediction: normaliseBool(prediction),
     date: day,
   });
 
   return res.status(201).json(poll);
+});
+
+// POST /poll/predict
+// Opponent records their yes/no prediction on an approved poll.
+pollsRouter.post('/poll/predict', async (req, res) => {
+  const { id, predictedBy, prediction } = req.body ?? {};
+  if (!id || !predictedBy || prediction == null) {
+    return res
+      .status(400)
+      .json({ error: '`id`, `predictedBy`, and `prediction` are required' });
+  }
+
+  const norm = normaliseBool(prediction);
+  if (!norm) return res.status(400).json({ error: '`prediction` is invalid' });
+
+  const poll = await Poll.findById(id);
+  if (!poll) return res.status(404).json({ error: 'Poll not found' });
+
+  if (!poll.approved || poll.rejected) {
+    return res.status(400).json({ error: 'Poll must be approved before predicting' });
+  }
+
+  poll.predictedBy = String(predictedBy).trim();
+  poll.prediction = norm;
+  await poll.save();
+
+  return res.json(poll);
 });
 
 // POST /poll/approve
@@ -106,17 +132,19 @@ pollsRouter.post('/poll/answer', async (req, res) => {
 
   poll.answer = normAnswer;
 
-  const delta = pollPoints({
-    prediction: poll.prediction,
-    answer: poll.answer,
-  });
-
-  if (delta !== 0) {
-    await Score.updateOne(
-      { player: poll.askedBy },
-      { $inc: { points: delta } },
-      { upsert: true },
-    );
+  let delta = 0;
+  if (poll.predictedBy && poll.prediction) {
+    delta = pollPoints({
+      prediction: poll.prediction,
+      answer: poll.answer,
+    });
+    if (delta !== 0) {
+      await Score.updateOne(
+        { player: poll.predictedBy },
+        { $inc: { points: delta } },
+        { upsert: true },
+      );
+    }
   }
 
   poll.scored = true;

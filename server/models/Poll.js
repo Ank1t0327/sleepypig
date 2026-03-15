@@ -8,6 +8,7 @@ const PollSchema = new mongoose.Schema(
     rejected: { type: Boolean, default: false },
     answer: { type: String, default: null, trim: true }, // e.g. "yes" / "no" / "true" / "false"
     prediction: { type: String, default: null, trim: true }, // same value space as answer
+    predictedBy: { type: String, default: null, trim: true },
     date: { type: Date, required: true },
     scored: { type: Boolean, default: false },
   },

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, ToggleLeft, User, Flag, CheckCircle, XCircle } from "lucide-react";
+import { ArrowLeft, ToggleLeft, User, Flag, CheckCircle, XCircle, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
-import { answerPoll, approvePoll, createPoll, fetchPolls, rejectPoll, type ApiPoll } from "@/lib/api";
+import { answerPoll, approvePoll, createPoll, fetchPolls, predictPoll, rejectPoll, type ApiPoll } from "@/lib/api";
 import { getDateString } from "@/lib/gameData";
+import { createChat } from "@/lib/chat";
 
 type ModePlayer = "Ankit" | "Vasu";
 
@@ -11,9 +12,15 @@ const MAX_QUESTIONS_PER_DAY = 5;
 
 const BooleanPig = () => {
   const navigate = useNavigate();
-  const [player, setPlayer] = useState<ModePlayer>("Ankit");
+  const [player, setPlayer] = useState<ModePlayer>(() => {
+    try {
+      const raw = localStorage.getItem("sleepypig-current-player");
+      return raw === "Vasu" ? "Vasu" : "Ankit";
+    } catch {
+      return "Ankit";
+    }
+  });
   const [question, setQuestion] = useState("");
-  const [prediction, setPrediction] = useState<"yes" | "no">("yes");
   const [polls, setPolls] = useState<ApiPoll[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -76,7 +83,6 @@ const BooleanPig = () => {
       await createPoll({
         question: question.trim(),
         askedBy: player,
-        prediction,
         date: todayKey,
       });
       setQuestion("");
@@ -106,6 +112,19 @@ const BooleanPig = () => {
     try {
       setBusyId(id);
       await rejectPoll(id);
+      const msg = window.prompt("Add a message for this rejection (optional)");
+      if (msg && msg.trim()) {
+        try {
+          await createChat({
+            sender: player,
+            text: msg.trim(),
+            context: "poll",
+            relatedId: id,
+          });
+        } catch {
+          // ignore chat errors
+        }
+      }
       toast.message("Poll rejected. Slot is still used for the day.");
       await refresh();
     } catch (e) {
@@ -123,6 +142,19 @@ const BooleanPig = () => {
       await refresh();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to answer poll");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const handlePredict = async (id: string, ans: "yes" | "no") => {
+    try {
+      setBusyId(id);
+      await predictPoll({ id, predictedBy: player, prediction: ans });
+      toast.success("Prediction locked in.");
+      await refresh();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to set prediction");
     } finally {
       setBusyId(null);
     }
@@ -156,7 +188,14 @@ const BooleanPig = () => {
             {(["Ankit", "Vasu"] as ModePlayer[]).map((p) => (
               <button
                 key={p}
-                onClick={() => setPlayer(p)}
+                onClick={() => {
+                  setPlayer(p);
+                  try {
+                    localStorage.setItem("sleepypig-current-player", p);
+                  } catch {
+                    // ignore
+                  }
+                }}
                 className={`px-3 py-1 text-xs rounded-full font-mono transition-colors ${
                   player === p ? "bg-primary text-primary-foreground" : "text-muted-foreground"
                 }`}
@@ -187,20 +226,7 @@ const BooleanPig = () => {
             onChange={(e) => setQuestion(e.target.value)}
             maxLength={140}
           />
-          <div className="flex items-center justify-between">
-            <div className="inline-flex rounded-full bg-secondary p-1">
-              {(["yes", "no"] as ("yes" | "no")[]).map((val) => (
-                <button
-                  key={val}
-                  onClick={() => setPrediction(val)}
-                  className={`px-3 py-1 text-xs rounded-full font-mono uppercase transition-colors ${
-                    prediction === val ? "bg-primary text-primary-foreground" : "text-muted-foreground"
-                  }`}
-                >
-                  {val}
-                </button>
-              ))}
-            </div>
+          <div className="flex items-center justify-end">
             <button
               onClick={handleCreatePoll}
               disabled={busyId === "create" || remainingSlots <= 0}
@@ -247,22 +273,43 @@ const BooleanPig = () => {
                       </button>
                     </div>
                   )}
-                  {p.approved && !p.answer && (
-                    <div className="flex gap-2 pt-2 border-t border-border">
-                      <button
-                        onClick={() => void handleAnswer(p._id!, "yes")}
-                        disabled={busyId === p._id}
-                        className="flex-1 py-1.5 rounded-lg bg-success/20 text-success text-xs font-medium active:scale-95"
-                      >
-                        <CheckCircle className="w-3 h-3 inline mr-1" /> Yes
-                      </button>
-                      <button
-                        onClick={() => void handleAnswer(p._id!, "no")}
-                        disabled={busyId === p._id}
-                        className="flex-1 py-1.5 rounded-lg bg-destructive/20 text-destructive text-xs font-medium active:scale-95"
-                      >
-                        <XCircle className="w-3 h-3 inline mr-1" /> No
-                      </button>
+                  {p.approved && !p.rejected && !p.answer && (
+                    <div className="flex flex-col gap-2 pt-2 border-t border-border">
+                      {!p.prediction ? (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => void handlePredict(p._id!, "yes")}
+                            disabled={busyId === p._id}
+                            className="flex-1 py-1.5 rounded-lg bg-success/20 text-success text-xs font-medium active:scale-95"
+                          >
+                            <CheckCircle className="w-3 h-3 inline mr-1" /> I predict YES
+                          </button>
+                          <button
+                            onClick={() => void handlePredict(p._id!, "no")}
+                            disabled={busyId === p._id}
+                            className="flex-1 py-1.5 rounded-lg bg-destructive/20 text-destructive text-xs font-medium active:scale-95"
+                          >
+                            <XCircle className="w-3 h-3 inline mr-1" /> I predict NO
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => void handleAnswer(p._id!, "yes")}
+                            disabled={busyId === p._id}
+                            className="flex-1 py-1.5 rounded-lg bg-success/20 text-success text-xs font-medium active:scale-95"
+                          >
+                            <CheckCircle className="w-3 h-3 inline mr-1" /> Event YES
+                          </button>
+                          <button
+                            onClick={() => void handleAnswer(p._id!, "no")}
+                            disabled={busyId === p._id}
+                            className="flex-1 py-1.5 rounded-lg bg-destructive/20 text-destructive text-xs font-medium active:scale-95"
+                          >
+                            <XCircle className="w-3 h-3 inline mr-1" /> Event NO
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

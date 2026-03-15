@@ -26,6 +26,7 @@ export type ApiPoll = {
   rejected: boolean;
   answer?: string | null;
   prediction?: string | null;
+  predictedBy?: string | null;
   date: string;
   scored?: boolean;
   createdAt?: string;
@@ -106,10 +107,20 @@ export async function fetchPolls(): Promise<ApiPoll[]> {
 export async function createPoll(input: {
   question: string;
   askedBy: string;
-  prediction: "yes" | "no";
   date: string;
 }): Promise<ApiPoll> {
   return requestJson<ApiPoll>("/poll", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export async function predictPoll(input: {
+  id: string;
+  predictedBy: string;
+  prediction: "yes" | "no";
+}): Promise<ApiPoll> {
+  return requestJson<ApiPoll>("/poll/predict", {
     method: "POST",
     body: JSON.stringify(input),
   });

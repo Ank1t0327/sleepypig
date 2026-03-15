@@ -23,14 +23,8 @@ function normResult(value) {
   return v;
 }
 
-function pointsFor({ woke, actualResult, prediction }) {
+function pointsFor({ actualResult, prediction }) {
   if (prediction == null) return 0;
-  if (woke === true) {
-    if (actualResult === 'present') return 0;
-    if (actualResult === 'absent') {
-      return prediction === 'absent' ? 1.25 : -0.25;
-    }
-  }
   return prediction === actualResult ? 1 : -0.25;
 }
 
@@ -97,7 +91,7 @@ predictionsRouter.post('/predictions', async (req, res) => {
 // POST /result
 // Save actual result and update scores.
 predictionsRouter.post('/result', async (req, res) => {
-  const { className, date, actual, actualResult, woke } = req.body ?? {};
+  const { className, date, actual, actualResult } = req.body ?? {};
   const actualIncoming = actual ?? actualResult; // accept either for backwards compatibility
   if (!className || !date || actualIncoming == null) {
     return res.status(400).json({ error: '`className`, `date`, and `actual` are required' });
@@ -122,7 +116,6 @@ predictionsRouter.post('/result', async (req, res) => {
   // If already scored, only allow updating the stored result without changing totals.
   if (existing.scored) {
     existing.actualResult = resultNorm;
-    if (woke !== undefined) existing.woke = Boolean(woke);
     await existing.save();
     const scores = await Score.find({ player: { $in: PLAYERS } })
       .sort({ player: 1 })
@@ -131,15 +124,13 @@ predictionsRouter.post('/result', async (req, res) => {
   }
 
   existing.actualResult = resultNorm;
-  if (woke !== undefined) existing.woke = Boolean(woke);
 
-  const wokeFlag = existing.woke === true;
   const ankitPred = normResult(existing.ankitPrediction);
   const vasuPred = normResult(existing.vasuPrediction);
 
   const deltas = {
-    Ankit: pointsFor({ woke: wokeFlag, actualResult: resultNorm, prediction: ankitPred }),
-    Vasu: pointsFor({ woke: wokeFlag, actualResult: resultNorm, prediction: vasuPred }),
+    Ankit: pointsFor({ actualResult: resultNorm, prediction: ankitPred }),
+    Vasu: pointsFor({ actualResult: resultNorm, prediction: vasuPred }),
   };
 
   await Promise.all(

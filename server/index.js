@@ -5,6 +5,9 @@ import mongoose from 'mongoose';
 
 import { predictionsRouter } from './routes/predictions.js';
 import { scoresRouter } from './routes/scores.js';
+import { pollsRouter } from './routes/polls.js';
+import { daresRouter } from './routes/dares.js';
+import { chatRouter } from './routes/chat.js';
 
 const PORT = Number(process.env.PORT) || 8080;
 const MONGO_URI = process.env.MONGO_URI;
@@ -33,6 +36,9 @@ app.get('/health', (_req, res) => res.json({ ok: true }));
 
 app.use(predictionsRouter);
 app.use(scoresRouter);
+app.use(pollsRouter);
+app.use(daresRouter);
+app.use(chatRouter);
 
 await mongoose.connect(MONGO_URI);
 

@@ -24,7 +24,6 @@ const Predictions = () => {
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<ApiPrediction[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [wokeState, setWokeState] = useState<Record<string, boolean>>({});
 
   const getStartMinutes = (timeLabel: string, fallbackHour: number) => {
     const first = timeLabel.split("-")[0]?.trim() ?? "";
@@ -99,11 +98,10 @@ const Predictions = () => {
     const cls = classes.find((c) => c.id === classId);
     if (!cls) return;
     const doc = todayDocs.get(cls.name);
-    const effectiveWoke = wokeState[cls.id] ?? (doc?.woke ?? false);
     void (async () => {
       try {
         setBusyKey(`${cls.name}:result`);
-        await postResult({ className: cls.name, date, actual: result, woke: effectiveWoke });
+        await postResult({ className: cls.name, date, actual: result });
         toast.success(`Marked ${cls.name} as ${result.toUpperCase()}`);
         await refreshAll();
       } catch (e) {
@@ -137,14 +135,14 @@ const Predictions = () => {
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h1 className="text-xl font-bold">Today's Classes</h1>
+            <h1 className="text-xl font-bold">EARLY PIG</h1>
             <p className="text-xs text-muted-foreground font-mono">{today} • {date}</p>
           </div>
         </div>
 
-        {/* Classes */}
+        {/* Early Pig - first class only */}
         <div className="space-y-3">
-          {classes.map((cls) => {
+          {classes.slice(0, 1).map((cls) => {
             const now = new Date();
             const nowMinutes = now.getHours() * 60 + now.getMinutes();
             const startMinutes = getStartMinutes(cls.time, cls.hour);
@@ -155,7 +153,6 @@ const Predictions = () => {
             const ankitDone = doc?.ankitPrediction === "absent";
             const vasuDone = doc?.vasuPrediction === "absent";
             const actual = doc?.actualResult ?? null;
-            const effectiveWoke = wokeState[cls.id] ?? (doc?.woke ?? false);
 
             return (
               <div key={cls.id} className="relative">
@@ -216,26 +213,6 @@ const Predictions = () => {
                     >
                       <User className="w-3 h-3 inline mr-1" />
                       {vasuDone ? "Vasu ✓" : "Vasu: ABSENT"}
-                    </button>
-                  </div>
-
-                  {/* Woke him up toggle */}
-                  <div className="flex items-center justify-end mb-2">
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setWokeState((prev) => ({
-                          ...prev,
-                          [cls.id]: !(prev[cls.id] ?? doc?.woke ?? false),
-                        }))
-                      }
-                      className={`text-xs font-mono px-2 py-1 rounded-full border transition-colors ${
-                        effectiveWoke
-                          ? "bg-primary/10 border-primary text-primary"
-                          : "bg-secondary/40 border-border text-muted-foreground"
-                      }`}
-                    >
-                      ☀️ Woke him up
                     </button>
                   </div>
 

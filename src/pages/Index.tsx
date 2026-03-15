@@ -76,23 +76,33 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Navigation Buttons */}
+        {/* Mode Selector */}
         <div className="space-y-3 flex-1">
           <NavButton
-            onClick={() => navigate("/predictions")}
+            onClick={() => navigate("/mode/earlypig")}
             icon={<Target className="w-5 h-5" />}
-            label="Make Today's Prediction"
+            label="Early Pig"
             accent
           />
           <NavButton
-            onClick={() => navigate("/scoreboard")}
+            onClick={() => navigate("/mode/booleanpig")}
+            icon={<Clock className="w-5 h-5" />}
+            label="Boolean Pig"
+          />
+          <NavButton
+            onClick={() => navigate("/mode/ringmaster")}
             icon={<Trophy className="w-5 h-5" />}
-            label="Scoreboard"
+            label="Ring Master of the Pig Bastard"
           />
           <NavButton
             onClick={() => navigate("/history")}
             icon={<Clock className="w-5 h-5" />}
             label="Prediction History"
+          />
+          <NavButton
+            onClick={() => navigate("/scoreboard")}
+            icon={<Trophy className="w-5 h-5" />}
+            label="Scoreboard"
           />
           <NavButton
             onClick={() => navigate("/makeup")}

@@ -99,8 +99,8 @@ export function clearGameData() {
 export function getTodayClasses(data: GameData): ClassSlot[] {
   const day = getTodayName();
   const base = TIMETABLE[day] || [];
-  const custom = data.customClasses[getDateString()] || [];
-  return [...base, ...custom];
+  // Early Pig mode: only first class of the day
+  return base.length > 0 ? [base[0]] : [];
 }
 
 export function getTodayPrediction(data: GameData, classId: string): Prediction | undefined {
@@ -134,10 +134,6 @@ export function recalculateScores(data: GameData): { ankit: number; vasu: number
   let vasu = 0;
   for (const p of data.predictions) {
     if (!p.actualResult) continue;
-    if (p.wokeUp && p.actualResult === "present") {
-      // both get 0
-      continue;
-    }
     if (p.ankitPredicted) {
       if (p.actualResult === "absent") ankit += 1;
       else ankit -= 0.25;

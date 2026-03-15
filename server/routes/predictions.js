@@ -1,6 +1,9 @@
 import express from 'express';
 import { Prediction } from '../models/Prediction.js';
 import { Score } from '../models/Score.js';
+import { Poll } from '../models/Poll.js';
+import { Dare } from '../models/Dare.js';
+import { Message } from '../models/Message.js';
 
 export const predictionsRouter = express.Router();
 
@@ -151,14 +154,24 @@ predictionsRouter.post('/result', async (req, res) => {
 
 // GET /predictions
 predictionsRouter.get('/predictions', async (_req, res) => {
+  const today = toDate(new Date());
+  if (today) {
+    await Prediction.deleteMany({ date: { $lt: today } });
+  }
   const docs = await Prediction.find().sort({ date: -1, createdAt: -1 }).lean();
   return res.json(docs);
 });
 
 // POST /reset
-// Hard reset: clears all predictions and scores.
+// Hard reset: clears all predictions, polls, dares, chats, and scores.
 predictionsRouter.post('/reset', async (_req, res) => {
-  await Promise.all([Prediction.deleteMany({}), Score.deleteMany({})]);
+  await Promise.all([
+    Prediction.deleteMany({}),
+    Score.deleteMany({}),
+    Poll.deleteMany({}),
+    Dare.deleteMany({}),
+    Message.deleteMany({}),
+  ]);
   return res.json({ ok: true });
 });
 

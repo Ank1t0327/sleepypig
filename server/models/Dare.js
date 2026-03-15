@@ -5,6 +5,7 @@ const DareSchema = new mongoose.Schema(
     text: { type: String, required: true, trim: true },
     createdBy: { type: String, required: true, trim: true },
     approved: { type: Boolean, default: false },
+    rejected: { type: Boolean, default: false },
     deadline: { type: Date, default: null },
     completed: { type: Boolean, default: false },
     scored: { type: Boolean, default: false },

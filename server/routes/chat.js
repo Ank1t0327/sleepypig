@@ -43,7 +43,12 @@ chatRouter.get('/chat', async (req, res) => {
     if (Number.isFinite(n) && n > 0 && n <= 200) limit = n;
   }
 
-  const filter = {};
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  // Best-effort: prune messages older than 24 hours so the DB doesn't grow unbounded.
+  await Message.deleteMany({ timestamp: { $lt: cutoff } }).catch(() => {});
+
+  const filter = { timestamp: { $gte: cutoff } };
   if (context) filter.context = String(context);
   if (relatedId) filter.relatedId = String(relatedId);
 

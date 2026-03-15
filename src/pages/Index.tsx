@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { useGameData } from "@/hooks/useGameData";
-import { calculateSkipProbability, clearGameData, getTodayName } from "@/lib/gameData";
+import { clearGameData, getTodayName } from "@/lib/gameData";
 import { Moon, Trophy, Clock, PlusCircle, Trash2, Target } from "lucide-react";
 import { toast } from "sonner";
 import { resetGame } from "@/lib/api";
@@ -8,7 +8,6 @@ import { resetGame } from "@/lib/api";
 const Index = () => {
   const navigate = useNavigate();
   const { data, update } = useGameData();
-  const skipProb = calculateSkipProbability(data);
   const today = getTodayName();
 
   const handleReset = () => {
@@ -57,32 +56,12 @@ const Index = () => {
           <p className="text-muted-foreground text-sm">To kya karega aapka Suar? 🐷</p>
         </div>
 
-        {/* Skip Probability */}
-        <div className="card-glass rounded-xl p-5 mb-6 animate-slide-up">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3 font-mono">
-            Today's Skip Chance
-          </p>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 h-4 bg-secondary rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-700"
-                style={{
-                  width: `${skipProb}%`,
-                  background: `linear-gradient(90deg, hsl(var(--primary)), hsl(var(--cosmic-orange-glow)))`,
-                }}
-              />
-            </div>
-            <span className="text-2xl font-bold font-mono text-primary">{skipProb}%</span>
-          </div>
-        </div>
-
         {/* Mode Selector */}
         <div className="space-y-3 flex-1">
           <NavButton
             onClick={() => navigate("/mode/earlypig")}
             icon={<Target className="w-5 h-5" />}
             label="Early Pig"
-            accent
           />
           <NavButton
             onClick={() => navigate("/mode/booleanpig")}

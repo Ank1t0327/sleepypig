@@ -4,7 +4,7 @@ import { ArrowLeft, ToggleLeft, User, Flag, CheckCircle, XCircle, MessageCircle 
 import { toast } from "sonner";
 import { answerPoll, approvePoll, createPoll, fetchPolls, predictPoll, rejectPoll, type ApiPoll } from "@/lib/api";
 import { getDateString } from "@/lib/gameData";
-import { createChat } from "@/lib/chat";
+import { createChat, fetchChatMessages } from "@/lib/chat";
 
 type ModePlayer = "Ankit" | "Vasu";
 
@@ -24,6 +24,7 @@ const BooleanPig = () => {
   const [polls, setPolls] = useState<ApiPoll[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejectionNotes, setRejectionNotes] = useState<Record<string, string>>({});
 
   const todayKey = getDateString();
 
@@ -68,6 +69,31 @@ const BooleanPig = () => {
   );
 
   const myRecent = todaysPolls.filter((p) => p.askedBy === player).slice(0, 5);
+
+  useEffect(() => {
+    const rejectedForMe = myRecent.filter((p) => p._id && p.rejected);
+    if (!rejectedForMe.length) {
+      setRejectionNotes({});
+      return;
+    }
+
+    void (async () => {
+      const entries: [string, string][] = [];
+      for (const p of rejectedForMe) {
+        const id = p._id!;
+        try {
+          const msgs = await fetchChatMessages({ context: "poll", relatedId: id, limit: 1 });
+          if (msgs.length > 0) {
+            entries.push([id, msgs[0].text]);
+          }
+        } catch {
+          // ignore chat fetch errors
+        }
+      }
+      setRejectionNotes(Object.fromEntries(entries));
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myRecent.map((p) => `${p._id}-${p.rejected}`).join("|")]);
 
   const handleCreatePoll = async () => {
     if (!question.trim()) {
@@ -342,7 +368,7 @@ const BooleanPig = () => {
                   <p className="font-mono text-muted-foreground">
                     Status:{" "}
                     {p.rejected
-                      ? "Rejected"
+                      ? `Rejected${rejectionNotes[p._id!] ? ` – ${rejectionNotes[p._id!]}` : ""}`
                       : p.approved
                       ? p.answer
                         ? `Answered: ${String(p.answer).toUpperCase()}`

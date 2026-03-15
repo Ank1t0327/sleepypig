@@ -156,6 +156,10 @@ pollsRouter.post('/poll/answer', async (req, res) => {
 
 // GET /polls
 pollsRouter.get('/polls', async (_req, res) => {
+  const today = toDateOnly(new Date());
+  if (today) {
+    await Poll.deleteMany({ date: { $lt: today } });
+  }
   const polls = await Poll.find().sort({ date: -1, createdAt: -1 }).lean();
   return res.json(polls);
 });

@@ -29,7 +29,22 @@ daresRouter.post('/dare/approve', async (req, res) => {
 
   const dare = await Dare.findByIdAndUpdate(
     id,
-    { $set: { approved: true, deadline } },
+    { $set: { approved: true, rejected: false, deadline } },
+    { new: true },
+  );
+
+  if (!dare) return res.status(404).json({ error: 'Dare not found' });
+  return res.json(dare);
+});
+
+// POST /dare/reject
+daresRouter.post('/dare/reject', async (req, res) => {
+  const { id } = req.body ?? {};
+  if (!id) return res.status(400).json({ error: '`id` is required' });
+
+  const dare = await Dare.findByIdAndUpdate(
+    id,
+    { $set: { rejected: true, approved: false, deadline: null } },
     { new: true },
   );
 
@@ -78,6 +93,11 @@ daresRouter.post('/dare/complete', async (req, res) => {
 
 // GET /dares
 daresRouter.get('/dares', async (_req, res) => {
+  const startOfToday = new Date();
+  startOfToday.setUTCHours(0, 0, 0, 0);
+
+  await Dare.deleteMany({ createdAt: { $lt: startOfToday } });
+
   const dares = await Dare.find().sort({ createdAt: -1 }).lean();
   return res.json(dares);
 });

@@ -3,12 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { ArrowLeft, Sparkles, User, CheckCircle, XCircle, Timer } from "lucide-react";
 import { toast } from "sonner";
 import { approveDare, completeDare, createDare, fetchDares, type ApiDare } from "@/lib/api";
+import { createChat } from "@/lib/chat";
 
 type ModePlayer = "Ankit" | "Vasu";
 
 const RingMasterPig = () => {
   const navigate = useNavigate();
-  const [player, setPlayer] = useState<ModePlayer>("Ankit");
+  const [player, setPlayer] = useState<ModePlayer>(() => {
+    try {
+      const raw = localStorage.getItem("sleepypig-current-player");
+      return raw === "Vasu" ? "Vasu" : "Ankit";
+    } catch {
+      return "Ankit";
+    }
+  });
   const [dareText, setDareText] = useState("");
   const [dares, setDares] = useState<ApiDare[]>([]);
   const [loading, setLoading] = useState(true);
@@ -128,7 +136,14 @@ const RingMasterPig = () => {
             {(["Ankit", "Vasu"] as ModePlayer[]).map((p) => (
               <button
                 key={p}
-                onClick={() => setPlayer(p)}
+                onClick={() => {
+                  setPlayer(p);
+                  try {
+                    localStorage.setItem("sleepypig-current-player", p);
+                  } catch {
+                    // ignore
+                  }
+                }}
                 className={`px-3 py-1 text-xs rounded-full font-mono transition-colors ${
                   player === p ? "bg-primary text-primary-foreground" : "text-muted-foreground"
                 }`}
@@ -199,7 +214,7 @@ const RingMasterPig = () => {
                     ) : (
                       <p className="text-xs font-mono text-muted-foreground">Waiting for approval</p>
                     )}
-                    {!d.approved && !d.completed && (
+                    {!d.approved && !d.completed && !d.rejected && (
                       <div className="flex gap-2 pt-1">
                         <button
                           onClick={() => void handleApprove(d._id!)}
@@ -208,7 +223,44 @@ const RingMasterPig = () => {
                         >
                           <CheckCircle className="w-3 h-3 inline mr-1" /> Approve &amp; Start Timer
                         </button>
-                        {/* Optional: could add reject/cancel here in future */}
+                        <button
+                          onClick={async () => {
+                            const reason = window.prompt("Add a message for rejecting this dare (optional)");
+                            try {
+                              setBusyId(d._id!);
+                              const res = await fetch("https://sleepypig.onrender.com/dare/reject", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ id: d._id }),
+                              });
+                              if (!res.ok) {
+                                throw new Error("Failed to reject dare");
+                              }
+                              if (reason && reason.trim()) {
+                                try {
+                                  await createChat({
+                                    sender: player,
+                                    text: reason.trim(),
+                                    context: "dare",
+                                    relatedId: d._id,
+                                  });
+                                } catch {
+                                  // ignore chat errors
+                                }
+                              }
+                              toast.message("Dare rejected.");
+                              await refresh();
+                            } catch (e) {
+                              toast.error(e instanceof Error ? e.message : "Failed to reject dare");
+                            } finally {
+                              setBusyId(null);
+                            }
+                          }}
+                          disabled={busyId === d._id}
+                          className="flex-1 py-1.5 rounded-lg bg-destructive/15 text-destructive text-xs font-medium active:scale-95"
+                        >
+                          <XCircle className="w-3 h-3 inline mr-1" /> Reject
+                        </button>
                       </div>
                     )}
                   </div>
@@ -244,7 +296,9 @@ const RingMasterPig = () => {
                     <p className="font-medium text-sm">{d.text}</p>
                     <p className="font-mono text-muted-foreground">
                       Status:{" "}
-                      {d.completed
+                      {d.rejected
+                        ? "Rejected"
+                        : d.completed
                         ? "Completed (check scoreboard for points)"
                         : d.approved
                         ? remaining !== null
